@@ -15,7 +15,7 @@ const GROCERY=['Extra-firm tofu — 2 blocks','TVP — about 12 oz','Eggs — 1 
 const MEALS=[{name:'Banana yogurt oats',type:'Breakfast',img:'https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=800&q=80',description:'Prepare oats according to package directions. Refrigerate; stir in chilled yogurt and add fresh banana when serving.'},{name:'Tofu rice bowl',type:'Lunch',img:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80',description:'Cook brown rice; bake tofu and cook broccoli. Combine in a bowl and season to taste.'},{name:'Lentil sweet potato bowl',type:'Lunch',img:'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&q=80',description:'Cook lentils and bake sweet potatoes. Serve together with cooked vegetables.'},{name:'TVP bean chili + rice',type:'Dinner',img:'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&q=80',description:'Rehydrate TVP, simmer with beans and seasonings, and serve with cooked brown rice.'},{name:'Egg + tofu bowl',type:'Dinner',img:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80',description:'Cook eggs thoroughly; serve with baked tofu, rice, and vegetables.'}];
 const MEAL_DAYS=[[0,1,3],[0,2,4],[0,1,3],[0,2,4],[0,1,3],[0,2,4],[0,1,3]];
 const KEY='form_fitness_v2';let state;try{state=JSON.parse(localStorage.getItem(KEY))||{}}catch{state={}};state.checks ||= {};state.notes ||= {};state.start ||= new Date().toISOString().slice(0,10);state.mealNotes ||= {};state.config ||= {};state.updated ||= new Date().toISOString();
-let page='dashboard',month=1,day=(new Date().getDay()+6)%7,week=1,token=null,account=null,syncTimer=null,syncMessage='Saved locally';
+let page='dashboard',month=1,day=(new Date().getDay()+6)%7,week=1,token=null,account=null,syncTimer=null,syncMessage='Saved locally',refreshToken=null,expiresAt=0,refreshPromise=null;
 const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const navs=[['dashboard','⌂','Dashboard'],['workouts','◇','Workouts'],['meals','▤','Meal prep'],['planner','▦','Year planner'],['settings','⚙','Settings']];
 function localSave(){state.updated=new Date().toISOString();localStorage.setItem(KEY,JSON.stringify(state));syncMessage=token?'Sync pending':'Saved locally';updateSync();if(token){clearTimeout(syncTimer);syncTimer=setTimeout(pushCloud,900)}}
@@ -43,8 +43,74 @@ function saveConfig(){let url=$('#url').value.trim().replace(/\/$/,'');let key=$
 function exportBackup(){let blob=new Blob([JSON.stringify({format:'form-v2',state},null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='form-progress-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 async function importBackup(file){if(!file)return;try{let data=JSON.parse(await file.text());if(data.format!=='form-v2'||!data.state||typeof data.state.checks!=='object')throw Error('Not a FORM. backup');if(!confirm('Replace your local progress with this backup?'))return;let cfg=state.config;state=data.state;state.config=cfg;localSave();render()}catch(e){alert('Unable to restore backup: '+e.message)}}
 function apiBase(){const {url,key}=state.config;if(!url||!key)throw Error('First save your Supabase project URL and publishable key in Settings.');return {url,key}}
-async function auth(mode){try{const {url,key}=apiBase();let email=$('#email').value.trim(),password=$('#password').value;if(!email||password.length<8)throw Error('Enter your email and a password of at least 8 characters.');const r=await fetch(`${url}/auth/v1/${mode==='signup'?'signup':'token?grant_type=password'}`,{method:'POST',headers:{'apikey':key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});let j=await r.json();if(!r.ok)throw Error(j.msg||j.error_description||j.message||'Authentication failed');if(j.access_token){token=j.access_token;account=j.user?.email||email;sessionStorage.setItem('form-session',JSON.stringify({token,account}));await pullCloud();render();alert('Signed in. Cloud sync is connected.')}else alert('Account created. Check your email to confirm your address, then sign in.')}catch(e){alert(e.message)}}
-function logout(){token=null;account=null;sessionStorage.removeItem('form-session');syncMessage='Saved locally';render()}
-async function pullCloud(){if(!token)return;try{const {url,key}=apiBase();let r=await fetch(`${url}/rest/v1/form_progress?select=data,updated_at&limit=1`,{headers:{apikey:key,Authorization:'Bearer '+token}});if(!r.ok)throw Error((await r.text()).slice(0,220));let rows=await r.json();if(rows.length&&rows[0].data){const remote=rows[0].data;if(new Date(rows[0].updated_at).getTime()>new Date(state.updated).getTime()){let cfg=state.config;state={...state,...remote,config:cfg};localStorage.setItem(KEY,JSON.stringify(state))}}syncMessage='Cloud connected';updateSync();render();if(!rows.length)await pushCloud()}catch(e){syncMessage='Cloud error';updateSync();alert('Cloud sync setup error: '+e.message+' — check the SQL setup instructions.')}}
-async function pushCloud(){if(!token)return;try{const {url,key}=apiBase();let userRes=await fetch(`${url}/auth/v1/user`,{headers:{apikey:key,Authorization:'Bearer '+token}});if(!userRes.ok)throw Error('Session expired. Sign in again.');let user=await userRes.json();let data={...state};delete data.config;let r=await fetch(`${url}/rest/v1/form_progress?on_conflict=user_id`,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify({user_id:user.id,data,updated_at:state.updated})});if(!r.ok)throw Error((await r.text()).slice(0,180));syncMessage='Synced to cloud';updateSync()}catch(e){syncMessage='Sync error — local copy saved';updateSync();console.warn(e)}}
-try{let session=JSON.parse(sessionStorage.getItem('form-session')||'null');if(session){token=session.token;account=session.account;syncMessage='Connecting…';setTimeout(pullCloud,300)}}catch{}render();if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
+const SESSION_KEY='form-auth-v3';
+function storeSession(j){
+ token=j.access_token;refreshToken=j.refresh_token||refreshToken;
+ account=j.user?.email||account;
+ expiresAt=Date.now()+(Number(j.expires_in)||3600)*1000;
+ localStorage.setItem(SESSION_KEY,JSON.stringify({token,refreshToken,account,expiresAt}));
+ sessionStorage.removeItem('form-session');
+}
+async function refreshSession(){
+ if(refreshPromise)return refreshPromise;
+ refreshPromise=(async()=>{
+  if(!refreshToken)throw Error('Please sign in again.');
+  const {url,key}=apiBase();
+  const r=await fetch(`${url}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:refreshToken})});
+  const j=await r.json();
+  if(!r.ok||!j.access_token)throw Error(j.error_description||j.msg||j.message||'Please sign in again.');
+  storeSession(j);return token;
+ })();
+ try{return await refreshPromise}finally{refreshPromise=null}
+}
+async function validToken(){
+ if(!token&&!refreshToken)throw Error('Please sign in.');
+ if(!token||Date.now()>=expiresAt-60000)await refreshSession();
+ return token;
+}
+async function cloudFetch(path,options={}){
+ const {url,key}=apiBase();
+ let bearer=await validToken();
+ const request=t=>fetch(url+path,{...options,headers:{...options.headers,apikey:key,Authorization:'Bearer '+t}});
+ let r=await request(bearer);
+ if(r.status===401){bearer=await refreshSession();r=await request(bearer)}
+ return r;
+}
+async function auth(mode){try{
+ const {url,key}=apiBase();let email=$('#email').value.trim(),password=$('#password').value;
+ if(!email||password.length<8)throw Error('Enter your email and a password of at least 8 characters.');
+ const r=await fetch(`${url}/auth/v1/${mode==='signup'?'signup':'token?grant_type=password'}`,{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+ let j=await r.json();if(!r.ok)throw Error(j.msg||j.error_description||j.message||'Authentication failed');
+ if(j.access_token){storeSession(j);await pullCloud();render();alert('Signed in. Cloud sync is connected.')}else alert('Account created. Check your email to confirm your address, then sign in.');
+ }catch(e){alert(e.message)}}
+async function logout(){
+ try{if(token){const {url,key}=apiBase();await fetch(`${url}/auth/v1/logout`,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+token}})}}catch(e){console.warn(e)}
+ token=null;refreshToken=null;account=null;expiresAt=0;
+ localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem('form-session');syncMessage='Saved locally';render();
+}
+async function pullCloud(){if(!token&&!refreshToken)return;try{
+ let r=await cloudFetch('/rest/v1/form_progress?select=data,updated_at&limit=1');
+ if(!r.ok)throw Error((await r.text()).slice(0,220));
+ let rows=await r.json();if(rows.length&&rows[0].data){const remote=rows[0].data;
+ if(new Date(rows[0].updated_at).getTime()>new Date(state.updated).getTime()){
+ let cfg=state.config;state={...state,...remote,config:cfg};localStorage.setItem(KEY,JSON.stringify(state))}}
+ syncMessage='Cloud connected';updateSync();render();if(!rows.length)await pushCloud();
+ }catch(e){syncMessage='Cloud error — local copy saved';updateSync();console.warn(e)}}
+async function pushCloud(){if(!token&&!refreshToken)return;try{
+ let userRes=await cloudFetch('/auth/v1/user');
+ if(!userRes.ok)throw Error('Session expired. Sign in again.');
+ let user=await userRes.json();let data={...state};delete data.config;
+ let r=await cloudFetch('/rest/v1/form_progress?on_conflict=user_id',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify({user_id:user.id,data,updated_at:state.updated})});
+ if(!r.ok)throw Error((await r.text()).slice(0,180));syncMessage='Synced to cloud';updateSync();
+ }catch(e){syncMessage='Sync error — local copy saved';updateSync();console.warn(e)}}
+try{
+ let session=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
+ if(session&&session.refreshToken){
+  token=session.token;refreshToken=session.refreshToken;account=session.account;expiresAt=session.expiresAt||0;
+  syncMessage='Connecting…';setTimeout(pullCloud,300);
+ }else if(sessionStorage.getItem('form-session')){
+  // Older versions did not retain a refresh token; a one-time sign-in is needed.
+  sessionStorage.removeItem('form-session');
+ }
+}catch(e){console.warn('Could not restore login',e)}
+render();if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
