@@ -1,0 +1,11 @@
+FORM. final meal-prep review — November 2026
+
+Preserves original Supabase auth, progress keys and cloud sync. Light Mode default; manually selected Dark Mode persists. Dark background #000000 with deep navy cards.
+
+Main grocery recipe totals reflect the seven-day breakfast/lunch/dinner schedule; snack amounts are separate and clearly labeled. Frozen meals include individual storage and freezing instructions. 7 oranges are included as vitamin C-rich snacks; optional frozen berries and peanut butter are separate. Shopping costs are estimates, not verified WinCo prices.
+
+Food safety: cool cooked food promptly in shallow containers, refrigerate within 2 hours (1 hour above 90 F), use refrigerated leftovers within 3–4 days, and freeze portions for later. Use freezer-safe packaging, never microwave aluminum foil.
+
+LIMITATIONS: brand photos are not verified package images; not every exercise has a direct YouTube video. No real-device testing.
+
+FBI PATHWAY UPDATE: Added a dedicated FBI pathway item to the left sidebar and mobile navigation. Includes age-appropriate fitness, school skills, recovery, checkboxes, and official career link. No adult fitness benchmarks. Existing progress storage and Supabase code unchanged.
