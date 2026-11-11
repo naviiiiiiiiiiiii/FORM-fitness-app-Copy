@@ -9,3 +9,5 @@ Food safety: cool cooked food promptly in shallow containers, refrigerate within
 LIMITATIONS: brand photos are not verified package images; not every exercise has a direct YouTube video. No real-device testing.
 
 FBI PATHWAY UPDATE: Added a dedicated FBI pathway item to the left sidebar and mobile navigation. Includes age-appropriate fitness, school skills, recovery, checkboxes, and official career link. No adult fitness benchmarks. Existing progress storage and Supabase code unchanged.
+
+PERSONALIZATION UPDATE: Dashboard greeting now includes Navi; time of day is based on local device clock. Cache updated to v10.
