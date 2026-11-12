@@ -1,0 +1,7 @@
+FORM. Nutrition update
+- Added approximate calories, protein, carbohydrates, and fat per serving to existing main meal cards and recipe details.
+- Added approximate nutrition to featured recipes where ingredient quantities support estimates.
+- Existing recipes, weekly schedule, grocery quantities, workouts, and saved progress storage remain unchanged.
+- Grocery required quantities were checked against the 7-day recipe schedule and whole-batch rounding; existing amounts match. Pack sizes and prices are illustrative.
+- Values use generic ingredient reference estimates; check package labels. Oats estimate assumes milk, not water.
+- Workout calorie burn is not added: individual energy expenditure cannot be reliably inferred from the workout list alone.
